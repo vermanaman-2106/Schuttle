@@ -1,0 +1,58 @@
+import { create } from 'zustand';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+const STORAGE_KEYS = {
+  TOKEN: 'token',
+  USER: 'user',
+};
+
+export const useAuthStore = create((set) => ({
+  token: null,
+  user: null,
+  isLoading: true,
+  isAuthenticated: false,
+
+  login: async (token, user) => {
+    // Update state immediately for instant UI response
+    set({ token, user, isAuthenticated: true });
+    
+    // Save to AsyncStorage in background (non-blocking)
+    // Don't await - let it happen in background, navigation works immediately
+    Promise.all([
+      AsyncStorage.setItem(STORAGE_KEYS.TOKEN, token),
+      AsyncStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(user)),
+    ]).catch((error) => {
+      console.error('Error saving auth data to storage (non-critical):', error);
+      // Don't revert state - user is already logged in, storage is just for persistence
+    });
+  },
+
+  logout: async () => {
+    try {
+      await AsyncStorage.removeItem(STORAGE_KEYS.TOKEN);
+      await AsyncStorage.removeItem(STORAGE_KEYS.USER);
+      set({ token: null, user: null, isAuthenticated: false });
+    } catch (error) {
+      console.error('Error clearing auth data:', error);
+    }
+  },
+
+  restoreSession: async () => {
+    try {
+      const [token, userJson] = await Promise.all([
+        AsyncStorage.getItem(STORAGE_KEYS.TOKEN),
+        AsyncStorage.getItem(STORAGE_KEYS.USER),
+      ]);
+
+      if (token && userJson) {
+        const user = JSON.parse(userJson);
+        set({ token, user, isAuthenticated: true, isLoading: false });
+      } else {
+        set({ isLoading: false });
+      }
+    } catch (error) {
+      console.error('Error restoring session:', error);
+      set({ isLoading: false });
+    }
+  },
+}));
