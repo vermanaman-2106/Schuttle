@@ -27,6 +27,8 @@ export const AppStack = () => {
               headerTitle: 'Ride Details',
               headerStyle: { backgroundColor: '#1A1D21' },
               headerTintColor: '#FFFFFF',
+              headerBackTitle: '', // Remove back button text
+              headerBackTitleVisible: false, // Hide back button text on iOS
             }}
           />
         </>

@@ -14,7 +14,7 @@ export const useAuthStore = create((set) => ({
 
   login: async (token, user) => {
     // Update state immediately for instant UI response
-    set({ token, user, isAuthenticated: true });
+      set({ token, user, isAuthenticated: true });
     
     // Save to AsyncStorage in background (non-blocking)
     // Don't await - let it happen in background, navigation works immediately

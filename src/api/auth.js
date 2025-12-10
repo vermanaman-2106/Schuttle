@@ -21,3 +21,9 @@ export const loginDriver = async (data) => {
   const response = await api.post('/auth/driver/login', data);
   return response.data;
 };
+
+// Save notification token
+export const saveNotificationToken = async (token) => {
+  const response = await api.put('/auth/notification-token', { notificationToken: token });
+  return response.data;
+};
