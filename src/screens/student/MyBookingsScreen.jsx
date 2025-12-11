@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -21,11 +21,11 @@ export default function MyBookingsScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  const loadBookings = async () => {
+  const loadBookings = useCallback(async () => {
     try {
       const response = await getMyBookings();
       if (response.success) {
-        setBookings(response.bookings);
+        setBookings(response.bookings || []);
       }
     } catch (error) {
       console.error('Error loading bookings:', error);
@@ -33,16 +33,16 @@ export default function MyBookingsScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     loadBookings();
-  }, []);
+  }, [loadBookings]);
 
-  const onRefresh = () => {
+  const onRefresh = useCallback(() => {
     setRefreshing(true);
     loadBookings();
-  };
+  }, [loadBookings]);
 
   const handleCancel = async (bookingId) => {
     Alert.alert('Cancel Booking', 'Are you sure you want to cancel this booking?', [
@@ -63,7 +63,7 @@ export default function MyBookingsScreen() {
     ]);
   };
 
-  const formatDateTime = (dateString) => {
+  const formatDateTime = useCallback((dateString) => {
     const date = new Date(dateString);
     return date.toLocaleString('en-US', {
       month: 'short',
@@ -72,9 +72,9 @@ export default function MyBookingsScreen() {
       hour: '2-digit',
       minute: '2-digit',
     });
-  };
+  }, []);
 
-  const renderBookingCard = ({ item }) => (
+  const renderBookingCard = useCallback(({ item }) => (
     <Card style={styles.bookingCard}>
       <View style={styles.bookingHeader}>
         <View style={styles.locationContainer}>
@@ -144,7 +144,7 @@ export default function MyBookingsScreen() {
         </TouchableOpacity>
       )}
     </Card>
-  );
+  ), [formatDateTime, handleCancel]);
 
   if (loading) {
     return (
@@ -170,6 +170,17 @@ export default function MyBookingsScreen() {
             <Text style={styles.emptyText}>No bookings yet</Text>
           </View>
         }
+        // Performance optimizations
+        removeClippedSubviews={true}
+        maxToRenderPerBatch={10}
+        updateCellsBatchingPeriod={50}
+        initialNumToRender={10}
+        windowSize={10}
+        getItemLayout={(data, index) => ({
+          length: 250, // Approximate item height
+          offset: 250 * index,
+          index,
+        })}
       />
     </View>
   );

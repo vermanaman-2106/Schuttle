@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -22,11 +22,11 @@ export default function DriverBookingsScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [processingId, setProcessingId] = useState(null);
 
-  const loadBookings = async () => {
+  const loadBookings = useCallback(async () => {
     try {
       const response = await getDriverBookings();
       if (response.success) {
-        setBookings(response.bookings);
+        setBookings(response.bookings || []);
       }
     } catch (error) {
       console.error('Error loading bookings:', error);
@@ -34,16 +34,16 @@ export default function DriverBookingsScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     loadBookings();
-  }, []);
+  }, [loadBookings]);
 
-  const onRefresh = () => {
+  const onRefresh = useCallback(() => {
     setRefreshing(true);
     loadBookings();
-  };
+  }, [loadBookings]);
 
   const formatDateTime = (dateString) => {
     const date = new Date(dateString);
@@ -249,6 +249,12 @@ export default function DriverBookingsScreen() {
             <Text style={styles.emptyText}>No bookings yet</Text>
           </View>
         }
+        // Performance optimizations
+        removeClippedSubviews={true}
+        maxToRenderPerBatch={10}
+        updateCellsBatchingPeriod={50}
+        initialNumToRender={10}
+        windowSize={10}
       />
     </View>
   );

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -22,11 +22,11 @@ export default function StudentHomeScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  const loadRides = async () => {
+  const loadRides = useCallback(async () => {
     try {
       const response = await getRides();
       if (response.success) {
-        setRides(response.rides);
+        setRides(response.rides || []);
       }
     } catch (error) {
       console.error('Error loading rides:', error);
@@ -34,23 +34,23 @@ export default function StudentHomeScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     loadRides();
-  }, []);
+  }, [loadRides]);
 
-  const onRefresh = () => {
+  const onRefresh = useCallback(() => {
     setRefreshing(true);
     loadRides();
-  };
+  }, [loadRides]);
 
-  const formatDate = (dateString) => {
+  const formatDate = useCallback((dateString) => {
     const date = new Date(dateString);
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-  };
+  }, []);
 
-  const renderRideCard = ({ item }) => (
+  const renderRideCard = useCallback(({ item }) => (
     <TouchableOpacity
       onPress={() => navigation.navigate('RideDetails', { rideId: item._id })}>
       <Card style={styles.rideCard}>
@@ -100,7 +100,7 @@ export default function StudentHomeScreen() {
         )}
       </Card>
     </TouchableOpacity>
-  );
+  ), [navigation, formatDate]);
 
   if (loading) {
     return (
@@ -126,6 +126,17 @@ export default function StudentHomeScreen() {
             <Text style={styles.emptyText}>No rides available</Text>
           </View>
         }
+        // Performance optimizations
+        removeClippedSubviews={true}
+        maxToRenderPerBatch={10}
+        updateCellsBatchingPeriod={50}
+        initialNumToRender={10}
+        windowSize={10}
+        getItemLayout={(data, index) => ({
+          length: 200, // Approximate item height
+          offset: 200 * index,
+          index,
+        })}
       />
     </View>
   );

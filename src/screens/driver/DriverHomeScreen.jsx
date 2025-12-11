@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -23,11 +23,11 @@ export default function DriverHomeScreen() {
   const [deletingId, setDeletingId] = useState(null);
   const [confirmingId, setConfirmingId] = useState(null);
 
-  const loadRides = async () => {
+  const loadRides = useCallback(async () => {
     try {
       const response = await getDriverRides();
       if (response.success) {
-        setRides(response.rides);
+        setRides(response.rides || []);
       }
     } catch (error) {
       console.error('Error loading rides:', error);
@@ -35,23 +35,23 @@ export default function DriverHomeScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     loadRides();
-  }, []);
+  }, [loadRides]);
 
-  const onRefresh = () => {
+  const onRefresh = useCallback(() => {
     setRefreshing(true);
     loadRides();
-  };
+  }, [loadRides]);
 
-  const formatDate = (dateString) => {
+  const formatDate = useCallback((dateString) => {
     const date = new Date(dateString);
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-  };
+  }, []);
 
-  const getStatusColor = (status) => {
+  const getStatusColor = useCallback((status) => {
     switch (status) {
       case 'pending':
         return colors.warning;
@@ -66,9 +66,9 @@ export default function DriverHomeScreen() {
       default:
         return colors.textMuted;
     }
-  };
+  }, []);
 
-  const handleConfirmRide = async (rideId) => {
+  const handleConfirmRide = useCallback(async (rideId) => {
     try {
       setConfirmingId(rideId);
       const response = await confirmRide(rideId);
@@ -95,9 +95,9 @@ export default function DriverHomeScreen() {
     } finally {
       setConfirmingId(null);
     }
-  };
+  }, []);
 
-  const handleDeleteRide = (rideId, pickupLocation, dropLocation) => {
+  const handleDeleteRide = useCallback((rideId, pickupLocation, dropLocation) => {
     Alert.alert(
       'Delete Ride',
       `Are you sure you want to delete this ride from ${pickupLocation} to ${dropLocation}?`,
@@ -137,9 +137,9 @@ export default function DriverHomeScreen() {
         },
       ]
     );
-  };
+  }, []);
 
-  const renderRideCard = ({ item }) => (
+  const renderRideCard = useCallback(({ item }) => (
     <Card style={styles.rideCard}>
       <View style={styles.rideHeader}>
         <View style={styles.locationContainer}>
@@ -209,7 +209,7 @@ export default function DriverHomeScreen() {
         </TouchableOpacity>
       </View>
     </Card>
-  );
+  ), [formatDate, getStatusColor, handleConfirmRide, handleDeleteRide, confirmingId, deletingId]);
 
   if (loading) {
     return (
@@ -236,6 +236,12 @@ export default function DriverHomeScreen() {
             <Text style={styles.emptySubtext}>Create your first ride to get started</Text>
           </View>
         }
+        // Performance optimizations
+        removeClippedSubviews={true}
+        maxToRenderPerBatch={10}
+        updateCellsBatchingPeriod={50}
+        initialNumToRender={10}
+        windowSize={10}
       />
     </View>
   );
