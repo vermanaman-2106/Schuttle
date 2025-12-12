@@ -74,8 +74,13 @@ export const useAuthStore = create((set) => ({
         return updatedUser;
       }
     } catch (error) {
-      console.error('Error refreshing user:', error);
+      // Only log if it's not a 404 (endpoint might not be deployed yet)
+      if (error.response?.status !== 404) {
+        console.error('Error refreshing user:', error);
+      }
       // Don't throw - just log the error, keep existing user data
+      // Return null to indicate refresh failed
+      return null;
     }
   },
 }));
