@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { getCurrentUser } from '../api/auth';
 
 const STORAGE_KEYS = {
   TOKEN: 'token',
@@ -53,6 +54,28 @@ export const useAuthStore = create((set) => ({
     } catch (error) {
       console.error('Error restoring session:', error);
       set({ isLoading: false });
+    }
+  },
+
+  // Refresh user data from database (useful when verification status changes in MongoDB)
+  refreshUser: async () => {
+    try {
+      const response = await getCurrentUser();
+      if (response.success && response.user) {
+        const updatedUser = {
+          id: response.user.id,
+          ...response.user,
+        };
+        set({ user: updatedUser });
+        // Update AsyncStorage in background
+        AsyncStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(updatedUser)).catch((err) => {
+          console.error('Error updating user in storage:', err);
+        });
+        return updatedUser;
+      }
+    } catch (error) {
+      console.error('Error refreshing user:', error);
+      // Don't throw - just log the error, keep existing user data
     }
   },
 }));

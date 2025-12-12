@@ -1,6 +1,7 @@
-import React from 'react';
-import { View, Text, StyleSheet, ScrollView, Alert } from 'react-native';
+import React, { useEffect, useState, useCallback } from 'react';
+import { View, Text, StyleSheet, ScrollView, Alert, RefreshControl } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
 import { colors, spacing, typography, borderRadius } from '../theme/colors';
 import { Card } from '../components/Card';
 import { Button } from '../components/Button';
@@ -9,7 +10,29 @@ import { Ionicons } from '@expo/vector-icons';
 
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
-  const { user, logout } = useAuthStore();
+  const { user, logout, refreshUser } = useAuthStore();
+  const [refreshing, setRefreshing] = useState(false);
+
+  // Refresh user data when screen comes into focus (e.g., after MongoDB Compass changes)
+  useFocusEffect(
+    useCallback(() => {
+      // Refresh user data silently when screen is focused
+      refreshUser().catch((err) => {
+        console.error('Error refreshing user on focus:', err);
+      });
+    }, [refreshUser])
+  );
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await refreshUser();
+    } catch (error) {
+      console.error('Error refreshing user:', error);
+    } finally {
+      setRefreshing(false);
+    }
+  }, [refreshUser]);
 
   const handleLogout = () => {
     Alert.alert('Logout', 'Are you sure you want to logout?', [
@@ -31,7 +54,10 @@ export default function ProfileScreen() {
   return (
     <ScrollView 
       style={styles.container} 
-      contentContainerStyle={[styles.content, { paddingBottom: 90 }]}>
+      contentContainerStyle={[styles.content, { paddingBottom: 90 }]}
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />
+      }>
       <View style={[styles.header, { paddingTop: insets.top + spacing.xl }]}>
         <View style={styles.avatar}>
           <Ionicons name="person" size={48} color={colors.accent} />

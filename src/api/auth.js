@@ -24,6 +24,12 @@ export const loginDriver = async (data) => {
 
 // Save notification token
 export const saveNotificationToken = async (token) => {
-  const response = await api.put('/auth/notification-token', { notificationToken: token });
+  const response = await api.put('/auth/notification-token', { token });
+  return response.data;
+};
+
+// Get current user profile (fresh from database)
+export const getCurrentUser = async () => {
+  const response = await api.get('/auth/me');
   return response.data;
 };
