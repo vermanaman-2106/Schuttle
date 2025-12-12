@@ -1,47 +1,95 @@
-import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   FlatList,
   RefreshControl,
-  ActivityIndicator,
   TouchableOpacity,
   Alert,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
 import { colors, spacing, typography, borderRadius } from '../../theme/colors';
 import { Card } from '../../components/Card';
 import { getMyBookings, cancelBooking } from '../../api/bookings';
 import { Ionicons } from '@expo/vector-icons';
+import { BookingCardSkeleton } from '../../components/SkeletonLoader';
+import { getCache, setCache } from '../../utils/cache';
 
 export default function MyBookingsScreen() {
   const insets = useSafeAreaInsets();
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const abortControllerRef = useRef(null);
 
-  const loadBookings = useCallback(async () => {
+  const loadBookings = useCallback(async (showCached = true) => {
+    // Cancel previous request if exists
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+
+    // Create new abort controller
+    abortControllerRef.current = new AbortController();
+
     try {
+      // Show cached data immediately if available
+      if (showCached) {
+        const cachedBookings = await getCache('myBookings');
+        if (cachedBookings) {
+          setBookings(cachedBookings);
+          setLoading(false);
+        }
+      }
+
+      // Fetch fresh data
       const response = await getMyBookings();
+      
+      // Check if request was aborted
+      if (abortControllerRef.current?.signal.aborted) {
+        return;
+      }
+
       if (response.success) {
-        setBookings(response.bookings || []);
+        const freshBookings = response.bookings || [];
+        setBookings(freshBookings);
+        // Cache the fresh data
+        await setCache('myBookings', freshBookings);
       }
     } catch (error) {
+      if (error.name === 'AbortError') {
+        return; // Request was cancelled, ignore
+      }
       console.error('Error loading bookings:', error);
+      // If we have cached data, keep showing it
+      if (bookings.length === 0) {
+        const cachedBookings = await getCache('myBookings');
+        if (cachedBookings) {
+          setBookings(cachedBookings);
+        }
+      }
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [bookings.length]);
 
-  useEffect(() => {
-    loadBookings();
-  }, [loadBookings]);
+  useFocusEffect(
+    useCallback(() => {
+      loadBookings(true);
+      return () => {
+        // Cleanup: abort request when screen loses focus
+        if (abortControllerRef.current) {
+          abortControllerRef.current.abort();
+        }
+      };
+    }, [loadBookings])
+  );
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
-    loadBookings();
+    loadBookings(false); // Don't show cached data on refresh
   }, [loadBookings]);
 
   const handleCancel = async (bookingId) => {
@@ -146,14 +194,6 @@ export default function MyBookingsScreen() {
     </Card>
   ), [formatDateTime, handleCancel]);
 
-  if (loading) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={colors.accent} />
-      </View>
-    );
-  }
-
   return (
     <View style={styles.container}>
       <View style={[styles.header, { paddingTop: insets.top + spacing.md }]}>
@@ -166,9 +206,26 @@ export default function MyBookingsScreen() {
         contentContainerStyle={styles.listContent}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />}
         ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>No bookings yet</Text>
-          </View>
+          loading ? (
+            <View style={styles.skeletonContainer}>
+              {[1, 2, 3].map((i) => (
+                <BookingCardSkeleton key={i} />
+              ))}
+            </View>
+          ) : (
+            <View style={styles.emptyContainer}>
+              <Text style={styles.emptyText}>No bookings yet</Text>
+            </View>
+          )
+        }
+        ListHeaderComponent={
+          loading && bookings.length === 0 ? (
+            <View style={styles.skeletonContainer}>
+              {[1, 2, 3].map((i) => (
+                <BookingCardSkeleton key={i} />
+              ))}
+            </View>
+          ) : null
         }
         // Performance optimizations
         removeClippedSubviews={true}
@@ -202,11 +259,8 @@ const styles = StyleSheet.create({
     ...typography.h2,
     color: colors.textPrimary,
   },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: colors.background,
+  skeletonContainer: {
+    padding: spacing.md,
   },
   listContent: {
     padding: spacing.md,

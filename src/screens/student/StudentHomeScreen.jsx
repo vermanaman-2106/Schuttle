@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -6,14 +6,15 @@ import {
   FlatList,
   TouchableOpacity,
   RefreshControl,
-  ActivityIndicator,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, spacing, typography, borderRadius } from '../../theme/colors';
 import { Card } from '../../components/Card';
 import { getRides } from '../../api/rides';
 import { Ionicons } from '@expo/vector-icons';
+import { RideCardSkeleton } from '../../components/SkeletonLoader';
+import { getCache, setCache } from '../../utils/cache';
 
 export default function StudentHomeScreen() {
   const navigation = useNavigation();
@@ -21,28 +22,74 @@ export default function StudentHomeScreen() {
   const [rides, setRides] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const abortControllerRef = useRef(null);
 
-  const loadRides = useCallback(async () => {
+  const loadRides = useCallback(async (showCached = true) => {
+    // Cancel previous request if exists
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+
+    // Create new abort controller
+    abortControllerRef.current = new AbortController();
+
     try {
+      // Show cached data immediately if available
+      if (showCached) {
+        const cachedRides = await getCache('rides');
+        if (cachedRides) {
+          setRides(cachedRides);
+          setLoading(false);
+        }
+      }
+
+      // Fetch fresh data
       const response = await getRides();
+      
+      // Check if request was aborted
+      if (abortControllerRef.current?.signal.aborted) {
+        return;
+      }
+
       if (response.success) {
-        setRides(response.rides || []);
+        const freshRides = response.rides || [];
+        setRides(freshRides);
+        // Cache the fresh data
+        await setCache('rides', freshRides);
       }
     } catch (error) {
+      if (error.name === 'AbortError') {
+        return; // Request was cancelled, ignore
+      }
       console.error('Error loading rides:', error);
+      // If we have cached data, keep showing it
+      if (rides.length === 0) {
+        const cachedRides = await getCache('rides');
+        if (cachedRides) {
+          setRides(cachedRides);
+        }
+      }
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [rides.length]);
 
-  useEffect(() => {
-    loadRides();
-  }, [loadRides]);
+  useFocusEffect(
+    useCallback(() => {
+      loadRides(true);
+      return () => {
+        // Cleanup: abort request when screen loses focus
+        if (abortControllerRef.current) {
+          abortControllerRef.current.abort();
+        }
+      };
+    }, [loadRides])
+  );
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
-    loadRides();
+    loadRides(false); // Don't show cached data on refresh
   }, [loadRides]);
 
   const formatDate = useCallback((dateString) => {
@@ -102,14 +149,6 @@ export default function StudentHomeScreen() {
     </TouchableOpacity>
   ), [navigation, formatDate]);
 
-  if (loading) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={colors.accent} />
-      </View>
-    );
-  }
-
   return (
     <View style={styles.container}>
       <View style={[styles.header, { paddingTop: insets.top + spacing.md }]}>
@@ -122,9 +161,26 @@ export default function StudentHomeScreen() {
         contentContainerStyle={styles.listContent}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />}
         ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>No rides available</Text>
-          </View>
+          loading ? (
+            <View style={styles.skeletonContainer}>
+              {[1, 2, 3].map((i) => (
+                <RideCardSkeleton key={i} />
+              ))}
+            </View>
+          ) : (
+            <View style={styles.emptyContainer}>
+              <Text style={styles.emptyText}>No rides available</Text>
+            </View>
+          )
+        }
+        ListHeaderComponent={
+          loading && rides.length === 0 ? (
+            <View style={styles.skeletonContainer}>
+              {[1, 2, 3].map((i) => (
+                <RideCardSkeleton key={i} />
+              ))}
+            </View>
+          ) : null
         }
         // Performance optimizations
         removeClippedSubviews={true}
@@ -157,12 +213,6 @@ const styles = StyleSheet.create({
   title: {
     ...typography.h2,
     color: colors.textPrimary,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: colors.background,
   },
   listContent: {
     padding: spacing.md,
@@ -237,6 +287,9 @@ const styles = StyleSheet.create({
   emptyText: {
     ...typography.body,
     color: colors.textMuted,
+  },
+  skeletonContainer: {
+    padding: spacing.md,
   },
 });
 
