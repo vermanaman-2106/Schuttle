@@ -12,10 +12,44 @@ import { useNavigation } from '@react-navigation/native';
 import { useAuthStore } from '../../store/authStore';
 import { Ionicons } from '@expo/vector-icons';
 
+// Helper function to convert dd-mm-yyyy to yyyy-mm-dd
+const convertToISOFormat = (dateString) => {
+  if (!dateString) return '';
+  // Check if already in yyyy-mm-dd format
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
+    return dateString;
+  }
+  // Convert from dd-mm-yyyy to yyyy-mm-dd
+  const parts = dateString.split('-');
+  if (parts.length === 3) {
+    const [day, month, year] = parts;
+    return `${year}-${month}-${day}`;
+  }
+  return dateString;
+};
+
+// Helper function to convert yyyy-mm-dd to dd-mm-yyyy
+const convertToDisplayFormat = (dateString) => {
+  if (!dateString) return '';
+  // Check if already in dd-mm-yyyy format
+  if (/^\d{2}-\d{2}-\d{4}$/.test(dateString)) {
+    return dateString;
+  }
+  // Convert from yyyy-mm-dd to dd-mm-yyyy
+  const parts = dateString.split('-');
+  if (parts.length === 3) {
+    const [year, month, day] = parts;
+    return `${day}-${month}-${year}`;
+  }
+  return dateString;
+};
+
 const validationSchema = Yup.object().shape({
   pickupLocation: Yup.string().required('Pickup location is required'),
   dropLocation: Yup.string().required('Drop location is required'),
-  date: Yup.string().required('Date is required'),
+  date: Yup.string()
+    .required('Date is required')
+    .matches(/^\d{2}-\d{2}-\d{4}$/, 'Date must be in DD-MM-YYYY format'),
   time: Yup.string().required('Time is required'),
   pricePerSeat: Yup.number()
     .min(0, 'Price must be positive')
@@ -55,8 +89,11 @@ export default function CreateRideScreen() {
 
     try {
       setLoading(true);
+      // Convert date from dd-mm-yyyy to yyyy-mm-dd for backend
+      const isoDate = convertToISOFormat(values.date);
       const response = await createRide({
         ...values,
+        date: isoDate,
         pricePerSeat: parseFloat(values.pricePerSeat),
         totalSeats: parseInt(values.totalSeats, 10),
       });
@@ -94,7 +131,10 @@ export default function CreateRideScreen() {
 
   const getTodayDate = () => {
     const today = new Date();
-    return today.toISOString().split('T')[0];
+    const day = String(today.getDate()).padStart(2, '0');
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+    const year = today.getFullYear();
+    return `${day}-${month}-${year}`; // Return in dd-mm-yyyy format
   };
 
   // Show verification message if driver is not verified
@@ -173,11 +213,22 @@ export default function CreateRideScreen() {
             />
             <Input
               label="Date"
-              placeholder="YYYY-MM-DD"
+              placeholder="DD-MM-YYYY (e.g., 25-01-2024)"
               value={values.date}
-              onChangeText={handleChange('date')}
+              onChangeText={(text) => {
+                // Auto-format as user types: dd-mm-yyyy
+                let formatted = text.replace(/[^\d]/g, ''); // Remove non-digits
+                if (formatted.length > 2) {
+                  formatted = formatted.substring(0, 2) + '-' + formatted.substring(2);
+                }
+                if (formatted.length > 5) {
+                  formatted = formatted.substring(0, 5) + '-' + formatted.substring(5, 9);
+                }
+                handleChange('date')(formatted);
+              }}
               onBlur={handleBlur('date')}
               error={touched.date && errors.date ? errors.date : undefined}
+              keyboardType="number-pad"
             />
             <Input
               label="Time"

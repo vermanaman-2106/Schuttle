@@ -46,6 +46,27 @@ api.interceptors.response.use(
       await AsyncStorage.removeItem('user');
       // You can dispatch a logout action here if using Redux/Zustand
     }
+    
+    // Handle 502 Bad Gateway (Render cold start or server down)
+    if (error.response?.status === 502) {
+      // Transform 502 error to have a more user-friendly message
+      error.userFriendlyMessage = 'Server is temporarily unavailable. This might be due to a cold start. Please try again in a few seconds.';
+    }
+    
+    // Handle 503 Service Unavailable
+    if (error.response?.status === 503) {
+      error.userFriendlyMessage = 'Service is temporarily unavailable. Please try again in a moment.';
+    }
+    
+    // Handle network errors
+    if (!error.response && error.message) {
+      if (error.message.includes('Network Error') || error.code === 'ERR_NETWORK') {
+        error.userFriendlyMessage = 'Network error. Please check your internet connection.';
+      } else if (error.code === 'ECONNABORTED' || error.message.includes('timeout')) {
+        error.userFriendlyMessage = 'Request timed out. The server might be starting up. Please try again.';
+      }
+    }
+    
     return Promise.reject(error);
   }
 );

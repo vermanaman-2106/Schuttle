@@ -15,6 +15,7 @@ import { getRides } from '../../api/rides';
 import { Ionicons } from '@expo/vector-icons';
 import { RideCardSkeleton } from '../../components/SkeletonLoader';
 import { getCache, setCache } from '../../utils/cache';
+import { retryRequest } from '../../utils/retry';
 
 export default function StudentHomeScreen() {
   const navigation = useNavigation();
@@ -22,6 +23,7 @@ export default function StudentHomeScreen() {
   const [rides, setRides] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState(null);
   const abortControllerRef = useRef(null);
 
   const loadRides = useCallback(async (showCached = true) => {
@@ -32,19 +34,26 @@ export default function StudentHomeScreen() {
 
     // Create new abort controller
     abortControllerRef.current = new AbortController();
+    setError(null); // Clear previous errors
 
     try {
       // Show cached data immediately if available
       if (showCached) {
         const cachedRides = await getCache('rides');
-        if (cachedRides) {
+        if (cachedRides && cachedRides.length > 0) {
           setRides(cachedRides);
           setLoading(false);
+          setError(null);
         }
       }
 
-      // Fetch fresh data
-      const response = await getRides();
+      // Fetch fresh data with retry logic for 502 errors (Render cold starts)
+      // Increased retries and delays for Render's slow cold starts (can take 30-60 seconds)
+      const response = await retryRequest(
+        () => getRides(),
+        5, // max retries (5 attempts total)
+        5000 // initial delay (5 seconds) - Render cold starts need more time
+      );
       
       // Check if request was aborted
       if (abortControllerRef.current?.signal.aborted) {
@@ -54,6 +63,7 @@ export default function StudentHomeScreen() {
       if (response.success) {
         const freshRides = response.rides || [];
         setRides(freshRides);
+        setError(null); // Clear error on success
         // Cache the fresh data
         await setCache('rides', freshRides);
       }
@@ -61,19 +71,31 @@ export default function StudentHomeScreen() {
       if (error.name === 'AbortError') {
         return; // Request was cancelled, ignore
       }
-      console.error('Error loading rides:', error);
-      // If we have cached data, keep showing it
-      if (rides.length === 0) {
-        const cachedRides = await getCache('rides');
-        if (cachedRides) {
-          setRides(cachedRides);
-        }
+      
+      // Get user-friendly error message
+      const errorMessage = error.userFriendlyMessage || 
+        error.response?.data?.message || 
+        error.message || 
+        'Failed to load rides';
+      
+      console.error('Error loading rides:', errorMessage);
+      
+      // Check for cached data
+      const cachedRides = await getCache('rides');
+      if (cachedRides && cachedRides.length > 0) {
+        // Show cached data and set error (user can retry)
+        setRides(cachedRides);
+        setError(errorMessage);
+      } else {
+        // No cached data, show error
+        setError(errorMessage);
+        setRides([]);
       }
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [rides.length]);
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
@@ -167,6 +189,21 @@ export default function StudentHomeScreen() {
                 <RideCardSkeleton key={i} />
               ))}
             </View>
+          ) : error && rides.length === 0 ? (
+            <View style={styles.errorContainer}>
+              <Ionicons name="alert-circle-outline" size={48} color={colors.error} />
+              <Text style={styles.errorText}>{error}</Text>
+              <TouchableOpacity
+                style={styles.retryButton}
+                onPress={() => {
+                  setError(null);
+                  setLoading(true);
+                  loadRides(false);
+                }}>
+                <Ionicons name="refresh" size={20} color={colors.accent} />
+                <Text style={styles.retryButtonText}>Retry</Text>
+              </TouchableOpacity>
+            </View>
           ) : (
             <View style={styles.emptyContainer}>
               <Text style={styles.emptyText}>No rides available</Text>
@@ -179,6 +216,19 @@ export default function StudentHomeScreen() {
               {[1, 2, 3].map((i) => (
                 <RideCardSkeleton key={i} />
               ))}
+            </View>
+          ) : error && rides.length > 0 ? (
+            <View style={styles.errorBanner}>
+              <Ionicons name="warning-outline" size={16} color={colors.warning || '#FFA500'} />
+              <Text style={styles.errorBannerText} numberOfLines={2}>{error}</Text>
+              <TouchableOpacity
+                onPress={() => {
+                  setError(null);
+                  loadRides(false);
+                }}
+                style={styles.retryButtonSmall}>
+                <Text style={styles.retryButtonSmallText}>Retry</Text>
+              </TouchableOpacity>
             </View>
           ) : null
         }
@@ -290,6 +340,57 @@ const styles = StyleSheet.create({
   },
   skeletonContainer: {
     padding: spacing.md,
+  },
+  errorContainer: {
+    padding: spacing.xl,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 200,
+  },
+  errorText: {
+    ...typography.body,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    marginTop: spacing.md,
+    marginBottom: spacing.lg,
+    paddingHorizontal: spacing.lg,
+  },
+  retryButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    backgroundColor: colors.accent,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    borderRadius: borderRadius.md,
+  },
+  retryButtonText: {
+    ...typography.bodyBold,
+    color: colors.buttonPrimaryText || '#000',
+  },
+  errorBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: (colors.warning || '#FFA500') + '20',
+    padding: spacing.md,
+    margin: spacing.md,
+    marginBottom: spacing.sm,
+    borderRadius: borderRadius.md,
+    gap: spacing.sm,
+  },
+  errorBannerText: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    flex: 1,
+  },
+  retryButtonSmall: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+  },
+  retryButtonSmallText: {
+    ...typography.caption,
+    color: colors.accent,
+    fontWeight: '600',
   },
 });
 
