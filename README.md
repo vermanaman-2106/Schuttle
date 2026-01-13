@@ -1,6 +1,6 @@
 # Schuttle - Ride Sharing App for MUJ
 
-A full-stack ride-sharing application for Manipal University Jaipur (MUJ) students and drivers. Built with React Native (Expo) and Node.js/Express backend.
+A full-stack ride-sharing application for students and drivers. Built with React Native (Expo) and Node.js/Express backend.
 
 ## Project Structure
 
