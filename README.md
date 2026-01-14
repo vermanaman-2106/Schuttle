@@ -2,6 +2,47 @@
 
 A full-stack ride-sharing application for students and drivers. Built with React Native (Expo) and Node.js/Express backend.
 
+## Overview
+
+**Schuttle** is a comprehensive ride-sharing platform designed specifically for the Manipal University Jaipur (MUJ) community. The application connects students who need transportation with verified drivers, facilitating safe and convenient ride-sharing within and around the campus.
+
+### Key Highlights
+
+- **🎓 Student-Centric**: Exclusive access for MUJ students with email verification
+- **🚗 Driver Verification**: Admin-controlled verification system ensuring safety and reliability
+- **⚡ Real-Time Updates**: Push notifications for booking confirmations, cancellations, and ride updates
+- **🔒 Secure & Reliable**: JWT authentication, atomic seat management, and role-based access control
+- **📱 Cross-Platform**: Native mobile app built with React Native (iOS & Android)
+- **🌐 Offline Support**: Cached data for offline viewing with automatic background sync
+- **⚙️ Production-Ready**: Optimized for performance with retry logic, caching, and error handling
+
+### How It Works
+
+1. **For Students**: 
+   - Register with MUJ email and browse available rides
+   - Book seats on confirmed rides with real-time availability
+   - Receive instant notifications when bookings are confirmed or rejected
+   - Manage and cancel bookings as needed
+
+2. **For Drivers**:
+   - Register and get verified by admin
+   - Create rides with pickup/drop locations, pricing, and seat capacity
+   - Confirm rides to make them visible to students
+   - Manage booking requests (confirm/reject) and track ride status
+
+3. **For Admins**:
+   - Verify driver accounts to ensure safety and compliance
+   - Monitor driver activity and manage the platform
+
+### Core Features
+
+- **Atomic Seat Booking**: Prevents overbooking with MongoDB atomic operations
+- **Two-Stage Ride System**: Rides start as "pending" and require driver confirmation before going live
+- **Booking Workflow**: Students request → Drivers confirm/reject → Real-time notifications
+- **Smart Caching**: 5-minute cache with automatic refresh for optimal performance
+- **Cold Start Handling**: Automatic retry logic for Render deployment cold starts
+- **Dark Theme UI**: Modern dark interface with neon accent colors
+
 ## Project Structure
 
 ```
